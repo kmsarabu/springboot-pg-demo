@@ -9,7 +9,7 @@ data:
   application.properties: |
     spring.application.name=demo
 
-    spring.datasource.url=jdbc:postgresql://apgt2.cluster-ch20k4wsy5b6.us-west-1.rds.amazonaws.com:5432/testdb
+    spring.datasource.url=jdbc:postgresql://xyz.us-west-1.rds.amazonaws.com:5432/testdb
     spring.datasource.username=newuser
     spring.datasource.password=newuser
 
