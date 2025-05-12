@@ -1,0 +1,61 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: demo-application-config
+  labels:
+    app: demo
+data:
+  application.properties: |
+    spring.application.name=demo
+
+    spring.datasource.url=jdbc:postgresql://apgt2.cluster-ch20k4wsy5b6.us-west-1.rds.amazonaws.com:5432/testdb
+    spring.datasource.username=newuser
+    spring.datasource.password=newuser
+
+    # connection timeout
+    spring.datasource.hikari.connection-timeout=1000
+    # min idle connections
+    spring.datasource.hikari.minimum-idle=10
+    # max pool size
+    spring.datasource.hikari.maximum-pool-size=50
+    spring.datasource.hikari.idle-timeout=30000
+    # spring.datasource.hikari.max-lifetime=30000
+    spring.datasource.hikari.auto-commit=true
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: springboot-demo
+  labels:
+    app: springboot-demo
+spec:
+  replicas: 2
+  strategy:
+    rollingUpdate:
+      maxSurge: 3
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: springboot-demo
+  template:
+    metadata:
+      labels:
+        app: springboot-demo
+    spec:
+      restartPolicy: Always
+      containers:
+      - name: springboot-demo
+        image: ksarabu/springboot-postgres-app:latest
+        imagePullPolicy: Always
+        ports:
+         - containerPort: 8080
+        volumeMounts:
+           - mountPath: /app/application.properties
+             name: demo-application-config
+      volumes:
+        - name: demo-application-config
+          configMap:
+            name: demo-application-config
+---
+
