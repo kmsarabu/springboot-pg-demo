@@ -8,20 +8,21 @@ metadata:
 data:
   application.properties: |
     spring.application.name=demo
-
-    spring.datasource.url=jdbc:postgresql://xyz.us-west-1.rds.amazonaws.com:5432/testdb
+    spring.datasource.url=jdbc:postgresql://xyz_apg.us-west-1.rds.amazonaws.com:5432/testdb
+    #spring.datasource.url=jdbc:postgresql://xyz_rpg.us-west-1.rds.amazonaws.com:5432/testdb
     spring.datasource.username=newuser
-    spring.datasource.password=newuser
-
+    spring.datasource.password=newuser  
     # connection timeout
-    spring.datasource.hikari.connection-timeout=1000
+    spring.datasource.hikari.connection-timeout=250
     # min idle connections
     spring.datasource.hikari.minimum-idle=10
     # max pool size
     spring.datasource.hikari.maximum-pool-size=50
     spring.datasource.hikari.idle-timeout=30000
-    # spring.datasource.hikari.max-lifetime=30000
+    spring.datasource.hikari.max-lifetime=600000
     spring.datasource.hikari.auto-commit=true
+    spring.datasource.hikari.connection-test-query=SELECT 1
+    spring.datasource.hikari.validation-timeout=1000
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -58,4 +59,86 @@ spec:
           configMap:
             name: demo-application-config
 ---
-
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: artillery-test-script
+data:
+  load-test.yml: |
+    config:
+      target: "http://springboot-demo:8080"
+      phases:
+        - duration: 60
+          arrivalRate: 5
+          rampTo: 50
+          name: "Warm up phase"
+        #- duration: 120
+        #  arrivalRate: 50
+        #  name: "Sustained load phase"
+        - duration: 1200
+          arrivalRate: 50
+          rampTo: 100
+          name: "Peak load phase"
+      defaults:
+        headers:
+          Content-Type: "application/json"
+      plugins:
+        metrics-by-endpoint: {}
+    scenarios:
+      - name: "API endpoints test"
+        flow:
+          - get:
+              url: "/api/city?name='Austin'"
+              expect:
+                - statusCode: 200
+          - get:
+              url: "/api/weathers"
+              expect:
+                - statusCode: 200
+      #    - get:
+      #        url: "/api/weatherHistory?city='Austin'"
+      #        expect:
+      #          - statusCode: 200
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: springboot-demo
+  labels:
+    app: springboot-demo
+spec:
+  type: ClusterIP
+  selector:
+    app: springboot-demo
+  ports:
+    - name: springboot-demo
+      protocol: TCP
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: artillery-load-test
+spec:
+  parallelism: 25
+  completions: 25
+  template:
+    spec:
+      containers:
+      - name: artillery
+        image: ksarabu/artillery:arm64
+        command: ["/bin/sh", "-c"]
+        args:
+          - "cd /tests && npx artillery run load-test.yml -o /tmp/report.json && cat /tmp/report.json"
+        volumeMounts:
+        - name: artillery-test-script
+          mountPath: /tests
+      restartPolicy: Never
+      volumes:
+      - name: artillery-test-script
+        configMap:
+          name: artillery-test-script
+  backoffLimit: 0
+  ---
+      
